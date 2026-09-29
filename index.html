@@ -62,6 +62,7 @@ textarea:focus-visible, button:focus-visible, select:focus-visible, label.btn:fo
 select { font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-height: 42px; }
 .meta { font-family: var(--font-num); font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .qrbox { background: #fff; border-radius: 8px; display: grid; place-items: center; padding: 8px; border: 1px solid var(--line); }
+.qr-empty { color: #5d6a67; font-size: 14px; text-align: center; padding: 48px 12px; }
 .qrbox canvas { width: 100%; max-width: 440px; height: auto; image-rendering: pixelated; display: block; }
 .parts { display: flex; gap: 6px; flex-wrap: wrap; }
 .chip { font-family: var(--font-num); font-size: 12px; min-width: 30px; text-align: center; padding: 3px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
@@ -106,7 +107,7 @@ select { font: inherit; color: var(--fg); background: var(--panel); border: 1px 
       <button class="btn" id="btn-paste" type="button">貼り付け</button>
       <button class="btn" id="btn-clear" type="button">クリア</button>
     </div>
-    <textarea id="send-text" spellcheck="false">例：明日の打ち合わせは10時から第2会議室です。図面は最新版（Rev.C）を持参してください。</textarea>
+    <textarea id="send-text" spellcheck="false" placeholder="ここに送りたい文章を入力・貼り付け"></textarea>
     <div class="row">
       <label class="label" for="density">QRの細かさ</label>
       <select id="density">
@@ -116,7 +117,7 @@ select { font: inherit; color: var(--fg); background: var(--panel); border: 1px 
       </select>
       <span class="meta grow" id="send-meta"></span>
     </div>
-    <div class="qrbox" id="qrbox" title="クリックで拡大表示"><canvas id="qr" width="440" height="440"></canvas></div>
+    <div class="qrbox" id="qrbox" title="クリックで拡大表示"><canvas id="qr" width="440" height="440"></canvas><div class="qr-empty" id="qr-empty" hidden>文章を入れると、ここにQRコードが表示されます</div></div>
     <div class="row" id="multi-ctrl" hidden>
       <button class="btn" id="btn-prev" type="button">◀ 前</button>
       <button class="btn primary" id="btn-play" type="button">一時停止</button>
@@ -12642,6 +12643,19 @@ function findAlignmentPattern(matrix, alignmentPatternQuads, topRight, topLeft, 
   var lastVersion = 0;
   function buildParts() {
     var text = $("send-text").value;
+    store("qt-draft", text);
+    store("qt-density", $("density").value);
+    var empty = text.length === 0;
+    $("qr").hidden = empty; $("qr-empty").hidden = !empty;
+    $("btn-zoom").disabled = empty;
+    if (empty) {
+      parts = []; cur = 0;
+      clearInterval(timer); timer = null;
+      $("send-meta").textContent = "";
+      $("multi-ctrl").hidden = true;
+      $("send-parts").innerHTML = "";
+      return;
+    }
     var limit = parseInt($("density").value, 10);
     var bytes = enc.encode(text).length;
     var chunks = splitText(text, limit);
@@ -12716,8 +12730,8 @@ function findAlignmentPattern(matrix, alignmentPatternQuads, topRight, topLeft, 
     $("overlay").hidden = false; drawBig();
     try { navigator.wakeLock && navigator.wakeLock.request("screen").then(function (w) { wakeLock = w; }).catch(function () {}); } catch (e) {}
   }
-  $("btn-zoom").addEventListener("click", openBig);
-  $("qrbox").addEventListener("click", openBig);
+  $("btn-zoom").addEventListener("click", function () { if (parts.length) openBig(); });
+  $("qrbox").addEventListener("click", function () { if (parts.length) openBig(); });
   $("overlay").addEventListener("click", function () {
     $("overlay").hidden = true;
     if (wakeLock) { wakeLock.release().catch(function () {}); wakeLock = null; }
@@ -12958,7 +12972,7 @@ function findAlignmentPattern(matrix, alignmentPatternQuads, topRight, topLeft, 
 
   /* ---------- 初期化 ---------- */
   var draft = store("qt-draft");
-  if (typeof draft === "string" && draft) $("send-text").value = draft;
+  if (typeof draft === "string" && draft && draft.indexOf("例：明日の打ち合わせは10時から") !== 0) $("send-text").value = draft;
   $("density").value = store("qt-density") || (isTouch ? "300" : "800");
   buildParts();
   var t0 = store("qt-tab");
